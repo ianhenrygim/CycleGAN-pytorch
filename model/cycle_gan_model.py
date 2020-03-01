@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.nn import init
 import itertools
 from torch.optim import lr_scheduler
 from .generator import ResnetGenerator
@@ -8,29 +9,33 @@ from .image_buffer import ImageBuffer
 
 class CycleGAN():
     def __init__(self, opt):
+        self.opt = opt
         self.isTrain = True if opt.mode == "train" else False
         self.useIdentity = True if opt.identity_loss else False
         
         # pre-procssing
-        self.n_residual_blocks = 9 if opt.size == 256 else 6
+        self.n_residual_blocks = 9 if opt.img_size == 256 else 6
 
         # for printing
         self.loss_names = ['D_A_loss', 'D_B_loss', 'G_A_loss', 'G_B_loss', 'forward_cycle_loss', 'backward_cycle_loss', 'idt_A_loss', 'idt_B_loss']
         self.model_names = ['G_A', 'G_B', 'D_A', 'D_B']
 
         # Generator
-        self.G_A = ResnetGenerator(opt.input_nc, opt.output_nc, n_residual_blocks)
-        self.G_B = ResnetGenerator(opt.output_nc, opt.input_nc, n_residual_blocks)
+        self.G_A = ResnetGenerator(opt.input_nc, opt.output_nc, self.n_residual_blocks)
+        self.G_B = ResnetGenerator(opt.output_nc, opt.input_nc, self.n_residual_blocks)
 
         # Discriminator
-        self.D_A = PatchGANGDiscriminator(input_nc)
-        self.D_B = PatchGANGDiscriminator(input_nc)
+        self.D_A = PatchGANGDiscriminator(opt.input_nc)
+        self.D_B = PatchGANGDiscriminator(opt.input_nc)
 
         # Loss
         # Todo : Add identity loss
         self.criterion_GAN = GANLoss().to("cuda")
-        self.criterion_Cycle = torch.nn.L1Loss()
+        self.criterion_cycle = torch.nn.L1Loss()
         self.criterion_Ientity = torch.nn.L1Loss()
+
+        self.idt_A_loss = 0
+        self.idt_B_loss = 0
         
         # Image Buffer
         self.fake_A_buffer = ImageBuffer(opt.img_buffer_size)
@@ -49,7 +54,7 @@ class CycleGAN():
         def weights_init(m): 
             classname = m.__class__.__name__
             if classname.find('Conv') != -1:
-                init.normal_(m.weight.data, 0.0, init_gain)
+                init.normal_(m.weight.data, 0.0, 0.2)
                 if hasattr(m, 'bias') and m.bias is not None:
                     init.constant_(m.bias.data, 0.0)
 
@@ -95,17 +100,19 @@ class CycleGAN():
     def backward_D(self):
         # D_A
         fake_B = self.fake_B_buffer.query(self.fake_B)
-        D_A_loss_real = self.criterion_GAN(self.real_B, True)
-        D_A_loss_fake = self.criterion_GAN(self.fake_B, False)
-        self.D_A_loss = D_A_loss_real * 0.5 + D_A_loss_fake * 0.5
-        self.D_A_loss.backward()
+        D_A_loss_real = self.criterion_GAN(self.D_A(self.real_B), True)
+        D_A_loss_fake = self.criterion_GAN(self.D_A(fake_B.detach()), False)
+        D_A_loss = D_A_loss_real * 0.5 + D_A_loss_fake * 0.5
+        D_A_loss.backward()
+        self.D_A_loss = D_A_loss
 
         # D_B
         fake_A = self.fake_A_buffer.query(self.fake_A)
-        D_B_loss_real = self.criterion_GAN(self.real_A, True)
-        D_B_loss_fake = self.criterion_GAN(self.fake_A, False)
-        self.D_B_loss = D_B_loss_real * 0.5 + D_B_loss_fake * 0.5
-        self.D_B_loss.backward()
+        D_B_loss_real = self.criterion_GAN(self.D_B(self.real_A), True)
+        D_B_loss_fake = self.criterion_GAN(self.D_B(fake_A.detach()), False)
+        D_B_loss = D_B_loss_real * 0.5 + D_B_loss_fake * 0.5
+        D_B_loss.backward()
+        self.D_B_loss = D_B_loss
 
     def get_scheduler(self, optimizer):
         def lambda_rule(epoch):
@@ -113,6 +120,14 @@ class CycleGAN():
             return lr_l
         
         return lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
+
+    def set_requires_grad(self, netType="D"):
+        nets = [self.D_A, self.D_B]
+        for net in nets:
+            if net is not None:
+                for param in net.parameters():
+                    param.requires_grad = True
+
 
 
 class GANLoss(nn.Module):
