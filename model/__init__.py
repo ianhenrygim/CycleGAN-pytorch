@@ -1,0 +1,1 @@
+from .cycle_gan_model import CycleGAN
