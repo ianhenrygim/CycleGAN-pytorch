@@ -1,11 +1,12 @@
 import torch
 import torch.nn as nn
+import itertools, os
 from torch.nn import init
-import itertools
 from torch.optim import lr_scheduler
 from .generator import ResnetGenerator
 from .discriminator import PatchGANGDiscriminator
 from .image_buffer import ImageBuffer
+from collections import OrderedDict
 
 class CycleGAN():
     def __init__(self, opt):
@@ -121,14 +122,38 @@ class CycleGAN():
         
         return lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
 
-    def set_requires_grad(self, netType="D"):
+    def set_requires_grad(self):
         nets = [self.D_A, self.D_B]
         for net in nets:
             if net is not None:
                 for param in net.parameters():
                     param.requires_grad = True
 
+    def update_learning_rate(self):
+        for scheduler in self.schedulers:
+            scheduler.step()
+        lr = self.optimizers[0].param_groups[0]['lr']
+        print('learning rate = %.7f' % lr)
 
+    def get_current_losses(self):
+        errors_ret = OrderedDict()
+        for name in self.loss_names:
+            if isinstance(name, str):
+                errors_ret[name] = float(getattr(self, name))
+        return errors_ret
+
+    def save_networks(self, epoch):
+        for name in self.model_names:
+            if isinstance(name, str):
+                save_filename = '%s_net_%s.pth' % (epoch, name)
+                save_path = os.path.join("./output", save_filename)
+                net = getattr(self, name)
+
+                if torch.cuda.is_available():
+                    torch.save(net.state_dict(), save_path)
+                    net.cuda(0)
+                else:
+                    torch.save(net.cpu().state_dict(), save_path)
 
 class GANLoss(nn.Module):
     def __init__(self):
