@@ -25,9 +25,9 @@ class CustomUnalignedDataset(Dataset):
     def __getitem__(self, index):
         return {
             'A': self.transforms(
-                Image.open(self.domain_A[index % len(self.domain_A)])),
+                Image.open(self.domain_A[index % len(self.domain_A)]).convert('RGB')),
             'B': self.transforms(
-                Image.open(self.domain_B[random.randint(0, len(self.domain_B) - 1)]))}
+                Image.open(self.domain_B[random.randint(0, len(self.domain_B) - 1)]).convert('RGB'))}
 
     def __len__(self):
         return max(len(self.domain_A), len(self.domain_B))
