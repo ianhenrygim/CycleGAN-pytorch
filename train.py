@@ -53,7 +53,7 @@ for epoch in tqdm(range(1, 201), desc="Process"):
                                             "fwd_loss": losses["forward_cycle_loss"],
                                             "bkwd_loss": losses["backward_cycle_loss"]}, total_iter)
 
-        if i in [1,2,3] and epoch % 20 == 0:
+        if i in [1,2,3,4,5,6,7,8] and epoch % 20 == 0:
             images = model.get_current_images()
             images_list = []
 

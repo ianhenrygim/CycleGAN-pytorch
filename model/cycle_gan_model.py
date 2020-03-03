@@ -76,8 +76,8 @@ class CycleGAN():
 
         self.fake_B = self.G_A(self.real_A)
         self.regen_A = self.G_B(self.fake_B)
-        self.fake_A = self.G_A(self.real_B)
-        self.regen_B = self.G_B(self.fake_A)
+        self.fake_A = self.G_B(self.real_B)
+        self.regen_B = self.G_A(self.fake_A)
 
     def backward_G(self):
         # GAN Loss
