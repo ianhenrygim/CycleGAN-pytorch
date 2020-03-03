@@ -10,8 +10,9 @@ class CustomParser():
         self.parser.add_argument('--batch_size', type=int, default=1, help='input batch size')
         self.parser.add_argument('--img_size', type=int, default=256, help='input rectangular image size')
         self.parser.add_argument('--img_buffer_size', type=int, default=50, help='input image buffer size')
-        self.parser.add_argument('--mode', type=str, default="train", help="choose the mode of network('train'/'test')")
         self.parser.add_argument('--identity_loss', action='store_true', help="use identity loss")
+        self.parser.add_argument('--checkpoint_path', type=str, default="./checkpoints", help="set a path to save checkpoints")
+        self.parser.add_argument('--output_path', type=str, default="./output", help="set a path to save generated images")
 
     def get_parser(self):
         return self.parser.parse_args()

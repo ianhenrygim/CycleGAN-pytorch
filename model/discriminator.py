@@ -27,7 +27,7 @@ class PatchGANGDiscriminator(nn.Module):
                 nn.LeakyReLU(0.2, True)]
 
         # C512
-        model += [nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
+        model += [nn.Conv2d(256, 512, kernel_size=4, stride=1, padding=1), # fix stride 2 -> 1
                 nn.InstanceNorm2d(512),
                 nn.LeakyReLU(0.2, True)]
 
@@ -37,7 +37,7 @@ class PatchGANGDiscriminator(nn.Module):
         self.model = nn.Sequential(*model)
 
     def forward(self, x):
-        return self.model(x)    # shape -> [1,1,15,15]
+        return self.model(x)    # shape -> [1,1,30,30]
 
 # Test
 if __name__ == "__main__":

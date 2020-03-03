@@ -17,8 +17,11 @@ __pycache__/
 # Dataset
 datasets/
 
-# Checkpoints
+# Output
 output/
+
+# Checkpoints
+checkpoints/
 
 # Distribution / packaging
 .Python

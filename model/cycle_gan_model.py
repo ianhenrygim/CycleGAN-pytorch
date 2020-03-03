@@ -11,15 +11,15 @@ from collections import OrderedDict
 class CycleGAN():
     def __init__(self, opt):
         self.opt = opt
-        self.isTrain = True if opt.mode == "train" else False
         self.useIdentity = True if opt.identity_loss else False
         
         # pre-procssing
         self.n_residual_blocks = 9 if opt.img_size == 256 else 6
 
         # for printing
-        self.loss_names = ['D_A_loss', 'D_B_loss', 'G_A_loss', 'G_B_loss', 'forward_cycle_loss', 'backward_cycle_loss', 'idt_A_loss', 'idt_B_loss']
+        self.loss_names = ['D_A_loss', 'D_B_loss', 'G_A_loss', 'G_B_loss', 'forward_cycle_loss', 'backward_cycle_loss', 'idt_A_loss', 'idt_B_loss', 'full_loss']
         self.model_names = ['G_A', 'G_B', 'D_A', 'D_B']
+        self.image_names = ['real_A', 'fake_B', 'regen_A', 'real_B', 'fake_A', 'regen_B']
 
         # Generator
         self.G_A = ResnetGenerator(opt.input_nc, opt.output_nc, self.n_residual_blocks)
@@ -48,7 +48,7 @@ class CycleGAN():
         self.optimizers = [self.optimzer_G, self.optimzer_D]    # for scheduler
 
         # scheduler
-        if self.isTrain:
+        if opt.isTrain:
             self.schedulers = [self.get_scheduler(optimizer) for optimizer in self.optimizers]
 
     def setup(self):
@@ -61,13 +61,14 @@ class CycleGAN():
 
         self.G_A.to("cuda")
         self.G_B.to("cuda")
-        self.D_A.to("cuda")
-        self.D_B.to("cuda")
-
         self.G_A.apply(weights_init)
         self.G_B.apply(weights_init)
-        self.D_A.apply(weights_init)
-        self.D_B.apply(weights_init)
+
+        if self.opt.isTrain:
+            self.D_A.to("cuda")
+            self.D_B.to("cuda")
+            self.D_A.apply(weights_init)
+            self.D_B.apply(weights_init)
 
     def forward(self, input):
         self.real_A = input['A'].to("cuda")
@@ -129,6 +130,9 @@ class CycleGAN():
                 for param in net.parameters():
                     param.requires_grad = True
 
+    def get_curent_learning_rate(self):
+        return self.optimizers[0].param_groups[0]['lr']
+
     def update_learning_rate(self):
         for scheduler in self.schedulers:
             scheduler.step()
@@ -142,11 +146,18 @@ class CycleGAN():
                 errors_ret[name] = float(getattr(self, name))
         return errors_ret
 
+    def get_current_images(self):
+        image_ret = OrderedDict()
+        for name in self.image_names:
+            if isinstance(name, str):
+                image_ret[name] = getattr(self, name)
+        return image_ret
+
     def save_networks(self, epoch):
         for name in self.model_names:
             if isinstance(name, str):
                 save_filename = '%s_net_%s.pth' % (epoch, name)
-                save_path = os.path.join("./output", save_filename)
+                save_path = os.path.join(self.opt.checkpoint_path, save_filename)
                 net = getattr(self, name)
 
                 if torch.cuda.is_available():
@@ -154,6 +165,27 @@ class CycleGAN():
                     net.cuda(0)
                 else:
                     torch.save(net.cpu().state_dict(), save_path)
+
+    def load_networks(self, epoch):
+        self.G_A.to("cuda")
+        self.G_B.to("cuda")
+
+        for name in self.model_names:
+            if isinstance(name, str):
+                load_filename = '%s_net_%s.pth' % (epoch, name)
+                load_path = os.path.join(self.opt.checkpoint_path, load_filename)
+                net = getattr(self, name)
+
+                state_dict = torch.load(load_path, map_location="cuda")
+                net.load_state_dict(state_dict)
+
+    def test(self, input):
+        with torch.no_grad():
+            self.forward(input)
+
+
+
+
 
 class GANLoss(nn.Module):
     def __init__(self):

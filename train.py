@@ -2,13 +2,18 @@ from parser import CustomParser
 from data import get_dataloader
 from model import CycleGAN
 from tqdm import tqdm
+from tensorboardX import SummaryWriter
 import time
+import torch
 
 opt = CustomParser().get_parser()
+opt.isTrain = True
+
 dataloader = get_dataloader(opt)
 model = CycleGAN(opt)
 model.setup()
 
+summary = SummaryWriter()
 total_iter = 0
 
 # training
@@ -29,15 +34,37 @@ for epoch in tqdm(range(1, 201), desc="Process"):
         model.backward_D()
         model.optimzer_D.step()
 
-        if total_iter % 200 == 0:    # print training losses and save logging information to the disk
+        if total_iter % 100 == 1:    
             losses = model.get_current_losses()
-            
-            # ['D_A_loss', 'D_B_loss', 'G_A_loss', 'G_B_loss', 'forward_cycle_loss', 'backward_cycle_loss'
-            loss_result = f'D_A : {losses["D_A_loss"]:<10}|D_B : {losses["D_B_loss"]:<10}|G_A : {losses["G_A_loss"]:<10}|G_B : {losses["G_B_loss"]:<10}|forward : {losses["forward_cycle_loss"]:<10}|backware : {losses["backward_cycle_loss"]:<10}|'
-            print(f'Total iter : {total_iter}')
-            print(loss_result)
+            learning_rate = model.get_curent_learning_rate()
 
-    if epoch % 10 == 0:              # cache our model every <save_epoch_freq> epochs
+            summary.add_scalar('loss/G_A_loss', losses["G_A_loss"], total_iter)
+            summary.add_scalar('loss/G_B_loss', losses["G_B_loss"], total_iter)
+            summary.add_scalar('loss/D_A_loss', losses["D_A_loss"], total_iter)
+            summary.add_scalar('loss/D_B_loss', losses["D_B_loss"], total_iter)
+            summary.add_scalar('loss/fwd_loss', losses["forward_cycle_loss"], total_iter)
+            summary.add_scalar('loss/bkwd_loss', losses["backward_cycle_loss"], total_iter)
+            summary.add_scalar('loss/full_loss', losses["full_loss"], total_iter)
+            summary.add_scalar('learning_rate', learning_rate, total_iter)
+            summary.add_scalars('loss/loss', {"G_A_loss": losses["G_A_loss"],
+                                            "G_B_loss": losses["G_B_loss"],
+                                            "D_A_loss": losses["D_A_loss"],
+                                            "D_B_loss": losses["D_B_loss"],
+                                            "fwd_loss": losses["forward_cycle_loss"],
+                                            "bkwd_loss": losses["backward_cycle_loss"]}, total_iter)
+
+        if i in [1,2,3] and epoch % 20 == 0:
+            images = model.get_current_images()
+            images_list = []
+
+            # ['real_A', 'fake_B', 'regen_A', 'real_B', 'fake_A', 'regen_B']
+            for key, value in images.items():
+                tmp = (value + 1.0) * 0.5
+                images_list += [torch.squeeze(tmp)]
+
+            summary.add_images(f'images/{i}', torch.stack(images_list))
+
+    if epoch % 20 == 0:              
         model.save_networks(epoch)
         
     print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, 200, time.time() - epoch_start_time))

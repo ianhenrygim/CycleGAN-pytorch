@@ -6,19 +6,22 @@ from PIL import Image
 def get_dataloader(opt):
     return DataLoader(CustomUnalignedDataset(opt), 
         batch_size=opt.batch_size, 
-        shuffle=True, 
-        num_workers=2)
+        shuffle=True if opt.isTrain else False,
+        num_workers=2 if opt.isTrain else 0)
 
 class CustomUnalignedDataset(Dataset):
     def __init__(self, opt):
+        self.mode = "train" if opt.isTrain else "test"
+
         # Todo : checking whether all files are image format or not
-        self.domain_A = sorted(glob.glob(os.path.join(opt.dataroot, '%sA' % opt.mode) + '/*.*'))
-        self.domain_B = sorted(glob.glob(os.path.join(opt.dataroot, '%sB' % opt.mode) + '/*.*'))
+        print(f"Dataset path : {os.path.join(opt.dataroot, '%sA(andB)' % self.mode)}")
+        self.domain_A = sorted(glob.glob(os.path.join(opt.dataroot, '%sA' % self.mode) + '/*.*'))
+        self.domain_B = sorted(glob.glob(os.path.join(opt.dataroot, '%sB' % self.mode) + '/*.*'))
 
         self.transforms = transforms.Compose([
             transforms.Resize(int(opt.img_size * 1.12), Image.BICUBIC),
             transforms.RandomCrop(opt.img_size),
-            transforms.RandomHorizontalFlip(),
+            transforms.RandomHorizontalFlip(0.5 if opt.isTrain else 0),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
